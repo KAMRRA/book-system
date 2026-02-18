@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>도서 및 물품 관리 시스템</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; margin-top: 20px; position: relative; }
+        .section { background-color: #f9f9f9; padding: 20px; margin: 15px auto; width: 90%; max-width: 700px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h2 { font-size: 1.2rem; margin-top: 0; color: #333; border-bottom: 2px solid #ddd; padding-bottom: 10px; }
+        h3 { font-size: 1rem; color: #555; text-align: left; margin-left: 10%; margin-bottom: 5px; }
+        input { padding: 8px; font-size: 15px; width: 180px; margin: 5px; }
+        button { padding: 8px 15px; font-size: 15px; cursor: pointer; margin: 5px; background-color: #007bff; color: white; border: none; border-radius: 5px; }
+        button:hover { background-color: #0056b3; }
+        
+        /* 기능별 버튼 색상 */
+        .btn-return { background-color: #28a745; }
+        .btn-return:hover { background-color: #218838; }
+        .btn-edit { background-color: #17a2b8; }
+        .btn-edit:hover { background-color: #138496; }
+        .btn-delete { background-color: #dc3545; }
+        .btn-delete:hover { background-color: #c82333; }
+        .btn-logout { background-color: #6c757d; padding: 5px 10px; font-size: 13px; }
+
+        #message { margin-top: 15px; font-weight: bold; height: 20px; }
+        
+        table { margin: 20px auto; border-collapse: collapse; width: 100%; background-color: white; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
+        th { background-color: #f1f1f1; }
+        .status-borrowed { color: red; font-weight: bold; }
+        .status-available { color: green; font-weight: bold; }
+        .borrower-name { color: #555; font-style: italic; }
+
+        #adminLoginBtn { position: absolute; top: 10px; right: 20px; font-size: 12px; background-color: #6c757d; padding: 5px 10px; }
+        #adminSection { display: none; border: 2px solid #ffc107; background-color: #fffbeb; }
+        .admin-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ffc107; padding-bottom: 10px; margin-bottom: 15px; }
+        .admin-header h2 { border: none; margin: 0; padding: 0; }
+    </style>
+</head>
+<body>
+
+    <button id="adminLoginBtn">⚙️ 관리자 로그인</button>
+
+    <h1>📚 도서 관리 시스템</h1>
+    
+    <div class="section">
+        <h2>대출 / 반납하기</h2>
+        <input type="text" id="borrowerName" placeholder="이름 (대출 시 필수)">
+        <br>
+        <input type="text" id="bookId" placeholder="도서 번호 스캔 또는 입력" autofocus>
+        <button id="borrowBtn">대출하기</button>
+        <button id="returnBtn" class="btn-return">반납하기</button>
+        <p id="message"></p>
+    </div>
+
+    <div class="section" id="adminSection">
+        <div class="admin-header">
+            <h2>🛠️ 관리자 전용 메뉴</h2>
+            <button id="adminLogoutBtn" class="btn-logout">나가기 🔒</button>
+        </div>
+        
+        <h3>새 도서 등록</h3>
+        <input type="text" id="newBookId" placeholder="새 도서 번호 (예: B003)">
+        <input type="text" id="newBookTitle" placeholder="도서명 입력">
+        <button id="registerBtn" style="background-color: #ffc107; color: black; font-weight: bold;">등록하기</button>
+
+        <hr style="border: 0.5px dashed #ccc; margin: 20px 0;">
+
+        <h3>도서 정보 수정 / 삭제</h3>
+        <input type="text" id="editBookId" placeholder="대상 도서 번호 입력">
+        <input type="text" id="editBookTitle" placeholder="새로운 도서명 (수정 시)">
+        <br>
+        <button id="editBtn" class="btn-edit">이름 수정</button>
+        <button id="deleteBtn" class="btn-delete">도서 삭제</button>
+    </div>
+
+    <div class="section">
+        <h2>실시간 도서 목록</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>도서 번호</th>
+                    <th>도서명</th>
+                    <th>상태</th>
+                    <th>대출자</th>
+                </tr>
+            </thead>
+            <tbody id="bookListBody">
+                </tbody>
+        </table>
+    </div>
+
+    <script type="module">
+        // deleteDoc (문서 삭제 기능) 추가 로드
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+        import { getFirestore, doc, getDoc, updateDoc, collection, onSnapshot, setDoc, deleteDoc } 
+            from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCVAR3-Gdh5fhOsXY76J1HgUQfg-dgncK8",
+            authDomain: "bookreturnsystem.firebaseapp.com",
+            projectId: "bookreturnsystem",
+            storageBucket: "bookreturnsystem.firebasestorage.app",
+            messagingSenderId: "676479956094",
+            appId: "1:676479956094:web:205b6e57d7a3eeb1cb542f"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const messageEl = document.getElementById('message');
+        const bookIdInput = document.getElementById('bookId');
+        const borrowerNameInput = document.getElementById('borrowerName');
+
+        // [관리자 모드] 로그인 및 나가기 로직
+        document.getElementById('adminLoginBtn').addEventListener('click', () => {
+            const password = prompt("관리자 비밀번호를 입력하세요:");
+            if (password === "1234") { 
+                document.getElementById('adminSection').style.display = 'block'; 
+                document.getElementById('adminLoginBtn').style.display = 'none'; 
+            } else if (password !== null) {
+                alert("비밀번호가 틀렸습니다.");
+            }
+        });
+
+        document.getElementById('adminLogoutBtn').addEventListener('click', () => {
+            document.getElementById('adminSection').style.display = 'none'; 
+            document.getElementById('adminLoginBtn').style.display = 'block'; 
+            alert("관리자 모드에서 안전하게 로그아웃 되었습니다.");
+        });
+
+        // 대출 및 반납 처리
+        async function processBook(actionType) {
+            const bookId = bookIdInput.value.trim();
+            const borrowerName = borrowerNameInput.value.trim();
+
+            if(bookId === "") { alert("도서 번호를 입력해주세요!"); return; }
+            if(actionType === 'borrow' && borrowerName === "") { alert("대출자 이름을 입력해주세요!"); return; }
+
+            messageEl.innerText = "처리 중...";
+            messageEl.style.color = "black";
+
+            try {
+                const docRef = doc(db, "books", bookId);
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    const bookData = docSnap.data();
+                    
+                    if (actionType === 'borrow') {
+                        if (bookData.status === "대출 가능") {
+                            await updateDoc(docRef, { status: "대출 중", borrower: borrowerName });
+                            messageEl.style.color = "blue";
+                            messageEl.innerText = `[${bookData.title}] 도서를 ${borrowerName}님이 대출했습니다.`;
+                        } else {
+                            messageEl.style.color = "red";
+                            messageEl.innerText = `현재 ${bookData.borrower}님이 대출 중인 도서입니다.`;
+                        }
+                    } else if (actionType === 'return') {
+                        if (bookData.status === "대출 중") {
+                            await updateDoc(docRef, { status: "대출 가능", borrower: "" });
+                            messageEl.style.color = "green";
+                            messageEl.innerText = `[${bookData.title}] 도서가 정상적으로 반납되었습니다!`;
+                        } else {
+                            messageEl.style.color = "orange";
+                            messageEl.innerText = "이미 반납되어 있는 도서입니다.";
+                        }
+                    }
+                } else {
+                    messageEl.style.color = "red";
+                    messageEl.innerText = "등록되지 않은 도서 번호입니다.";
+                }
+            } catch (error) {
+                console.error("에러 발생:", error);
+                messageEl.innerText = "오류가 발생했습니다.";
+            }
+
+            bookIdInput.value = ''; 
+            bookIdInput.focus(); 
+        }
+
+        // [관리자] 새 도서 등록
+        async function registerNewBook() {
+            const newId = document.getElementById('newBookId').value.trim();
+            const newTitle = document.getElementById('newBookTitle').value.trim();
+
+            if(newId === "" || newTitle === "") { alert("도서 번호와 도서명을 입력해주세요."); return; }
+
+            try {
+                const docRef = doc(db, "books", newId);
+                const docSnap = await getDoc(docRef);
+
+                if(docSnap.exists()) { alert("이미 등록된 번호입니다."); return; }
+
+                await setDoc(docRef, { title: newTitle, status: "대출 가능", borrower: "" });
+                alert(`[${newTitle}] 등록 완료!`);
+                document.getElementById('newBookId').value = '';
+                document.getElementById('newBookTitle').value = '';
+            } catch(error) { alert("등록 오류 발생"); }
+        }
+
+        // [관리자] 도서명 수정
+        async function editBook() {
+            const editId = document.getElementById('editBookId').value.trim();
+            const editTitle = document.getElementById('editBookTitle').value.trim();
+
+            if(editId === "" || editTitle === "") { alert("수정할 도서 번호와 새로운 도서명을 입력해주세요."); return; }
+
+            try {
+                const docRef = doc(db, "books", editId);
+                const docSnap = await getDoc(docRef);
+
+                if(!docSnap.exists()) { alert("해당 번호의 도서를 찾을 수 없습니다."); return; }
+
+                await updateDoc(docRef, { title: editTitle });
+                alert(`성공적으로 수정되었습니다.`);
+                document.getElementById('editBookId').value = '';
+                document.getElementById('editBookTitle').value = '';
+            } catch(error) { alert("수정 오류 발생"); }
+        }
+
+        // [관리자] 도서 완전히 삭제
+        async function deleteBook() {
+            const editId = document.getElementById('editBookId').value.trim();
+
+            if(editId === "") { alert("삭제할 도서 번호를 입력해주세요."); return; }
+
+            // 삭제 전 한 번 더 물어보기 (안전 장치)
+            if(confirm(`정말 [${editId}] 도서를 시스템에서 완전히 삭제하시겠습니까?`)) {
+                try {
+                    const docRef = doc(db, "books", editId);
+                    const docSnap = await getDoc(docRef);
+
+                    if(!docSnap.exists()) { alert("해당 번호의 도서를 찾을 수 없습니다."); return; }
+
+                    await deleteDoc(docRef);
+                    alert(`삭제되었습니다.`);
+                    document.getElementById('editBookId').value = '';
+                    document.getElementById('editBookTitle').value = '';
+                } catch(error) { alert("삭제 오류 발생"); }
+            }
+        }
+
+        // 실시간 도서 목록 업데이트
+        const booksCollection = collection(db, "books");
+        onSnapshot(booksCollection, (snapshot) => {
+            const tbody = document.getElementById('bookListBody');
+            tbody.innerHTML = ""; 
+
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                const statusClass = data.status === "대출 중" ? "status-borrowed" : "status-available";
+                const displayBorrower = data.borrower ? data.borrower : "-"; 
+                
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td>${doc.id}</td>
+                    <td>${data.title}</td>
+                    <td class="${statusClass}">${data.status}</td>
+                    <td class="borrower-name">${displayBorrower}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        });
+
+        // 버튼 클릭 이벤트 연결
+        document.getElementById('borrowBtn').addEventListener('click', () => processBook('borrow'));
+        document.getElementById('returnBtn').addEventListener('click', () => processBook('return'));
+        document.getElementById('registerBtn').addEventListener('click', registerNewBook);
+        document.getElementById('editBtn').addEventListener('click', editBook);
+        document.getElementById('deleteBtn').addEventListener('click', deleteBook);
+        
+        bookIdInput.addEventListener('keypress', async function (e) {
+            if (e.key === 'Enter') { 
+                const bookId = bookIdInput.value.trim();
+                if(bookId === "") return;
+                
+                const docRef = doc(db, "books", bookId);
+                const docSnap = await getDoc(docRef);
+                if(docSnap.exists()) {
+                    if(docSnap.data().status === "대출 가능") processBook('borrow');
+                    else processBook('return');
+                }
+            }
+        });
+    </script>
+</body>
+</html>
