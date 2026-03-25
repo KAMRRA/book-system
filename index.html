@@ -1029,77 +1029,101 @@
     }
 
     /* ── 관리자: 등록 ── */
-    document.getElementById('registerBtn').addEventListener('click', async () => {
+    document.getElementById('registerBtn').addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
         const newId = document.getElementById('newBookId').value.trim();
         const newTitle = document.getElementById('newBookTitle').value.trim();
-        if (!newId || !newTitle) { showMsg('번호와 도서명을 입력해주세요.', 'error'); return; }
 
-        const docRef = doc(db, 'books', newId);
-        const snap = await getDoc(docRef);
-        if (snap.exists()) { showMsg('이미 등록된 번호입니다.', 'error'); return; }
+        if (!newId) { showMsg('등록 번호를 입력해주세요.', 'error'); return; }
+        if (!newTitle) { showMsg('도서/물품명을 입력해주세요.', 'error'); return; }
 
-        await setDoc(docRef, {
-            ward: document.getElementById('newBookWard').value,
-            title: newTitle,
-            author: document.getElementById('newBookAuthor').value.trim(),
-            publisher: document.getElementById('newBookPublisher').value.trim(),
-            genre: document.getElementById('newBookGenre').value,
-            note: document.getElementById('newBookNote').value.trim(),
-            status: '대출 가능',
-            borrower: '',
-            borrowDate: '',
-            extendDate: '',
-        });
-        showMsg(`[${newTitle}] 등록 완료!`, 'success');
-        ['newBookId','newBookTitle','newBookAuthor','newBookPublisher','newBookNote','isbnInput'].forEach(fieldId => {
-            document.getElementById(fieldId).value = '';
-        });
+        try {
+            showMsg('등록 중...', '');
+            const bookDocRef = doc(db, 'books', newId);
+            const bookSnap = await getDoc(bookDocRef);
+            if (bookSnap.exists()) { showMsg('이미 등록된 번호입니다.', 'error'); return; }
+
+            await setDoc(bookDocRef, {
+                ward: document.getElementById('newBookWard').value,
+                title: newTitle,
+                author: document.getElementById('newBookAuthor').value.trim(),
+                publisher: document.getElementById('newBookPublisher').value.trim(),
+                genre: document.getElementById('newBookGenre').value,
+                note: document.getElementById('newBookNote').value.trim(),
+                status: '대출 가능',
+                borrower: '',
+                borrowDate: '',
+                extendDate: '',
+            });
+
+            showMsg('[' + newTitle + '] 등록 완료!', 'success');
+            ['newBookId','newBookTitle','newBookAuthor','newBookPublisher','newBookNote','isbnInput'].forEach(function(fieldId) {
+                document.getElementById(fieldId).value = '';
+            });
+        } catch (err) {
+            console.error('등록 오류:', err);
+            showMsg('등록 실패: ' + err.message, 'error');
+        }
     });
 
     /* ── 관리자: 수정 ── */
-    document.getElementById('editBtn').addEventListener('click', async () => {
-        const id = document.getElementById('editBookId').value.trim();
-        if (!id) { showMsg('대상 번호를 입력해주세요.', 'error'); return; }
-        const docRef = doc(db, 'books', id);
-        const snap = await getDoc(docRef);
-        if (!snap.exists()) { showMsg('존재하지 않는 번호입니다.', 'error'); return; }
+    document.getElementById('editBtn').addEventListener('click', async (e) => {
+        e.preventDefault();
+        try {
+            const editId = document.getElementById('editBookId').value.trim();
+            if (!editId) { showMsg('대상 번호를 입력해주세요.', 'error'); return; }
+            const editDocRef = doc(db, 'books', editId);
+            const editSnap = await getDoc(editDocRef);
+            if (!editSnap.exists()) { showMsg('존재하지 않는 번호입니다.', 'error'); return; }
 
-        const updates = {};
-        const title = document.getElementById('editBookTitle').value.trim();
-        const author = document.getElementById('editBookAuthor').value.trim();
-        const publisher = document.getElementById('editBookPublisher').value.trim();
-        const genre = document.getElementById('editBookGenre').value;
-        const ward = document.getElementById('editBookWard').value;
-        const note = document.getElementById('editBookNote').value.trim();
+            const updates = {};
+            const eTitle = document.getElementById('editBookTitle').value.trim();
+            const eAuthor = document.getElementById('editBookAuthor').value.trim();
+            const ePublisher = document.getElementById('editBookPublisher').value.trim();
+            const eGenre = document.getElementById('editBookGenre').value;
+            const eWard = document.getElementById('editBookWard').value;
+            const eNote = document.getElementById('editBookNote').value.trim();
 
-        if (title) updates.title = title;
-        if (author) updates.author = author;
-        if (publisher) updates.publisher = publisher;
-        if (genre) updates.genre = genre;
-        if (ward) updates.ward = ward;
-        if (note) updates.note = note;
+            if (eTitle) updates.title = eTitle;
+            if (eAuthor) updates.author = eAuthor;
+            if (ePublisher) updates.publisher = ePublisher;
+            if (eGenre) updates.genre = eGenre;
+            if (eWard) updates.ward = eWard;
+            if (eNote) updates.note = eNote;
 
-        if (Object.keys(updates).length === 0) { showMsg('수정할 내용을 입력해주세요.', 'warning'); return; }
-        await updateDoc(docRef, updates);
-        showMsg('수정 완료!', 'success');
-        ['editBookId','editBookTitle','editBookAuthor','editBookPublisher','editBookNote'].forEach(fieldId => {
-            document.getElementById(fieldId).value = '';
-        });
-        document.getElementById('editBookGenre').value = '';
-        document.getElementById('editBookWard').value = '';
+            if (Object.keys(updates).length === 0) { showMsg('수정할 내용을 입력해주세요.', 'warning'); return; }
+            await updateDoc(editDocRef, updates);
+            showMsg('수정 완료!', 'success');
+            ['editBookId','editBookTitle','editBookAuthor','editBookPublisher','editBookNote'].forEach(function(fieldId) {
+                document.getElementById(fieldId).value = '';
+            });
+            document.getElementById('editBookGenre').value = '';
+            document.getElementById('editBookWard').value = '';
+        } catch (err) {
+            console.error('수정 오류:', err);
+            showMsg('수정 실패: ' + err.message, 'error');
+        }
     });
 
     /* ── 관리자: 삭제 ── */
-    document.getElementById('deleteBtn').addEventListener('click', async () => {
-        const id = document.getElementById('editBookId').value.trim();
-        if (!id) { showMsg('삭제할 번호를 입력해주세요.', 'error'); return; }
-        if (!confirm(`정말 [${id}] 항목을 삭제하시겠습니까?`)) return;
-        const docRef = doc(db, 'books', id);
-        const snap = await getDoc(docRef);
-        if (!snap.exists()) { showMsg('존재하지 않는 번호입니다.', 'error'); return; }
-        await deleteDoc(docRef);
-        showMsg('삭제 완료', 'success');
-        document.getElementById('editBookId').value = '';
+    document.getElementById('deleteBtn').addEventListener('click', async (e) => {
+        e.preventDefault();
+        try {
+            const delId = document.getElementById('editBookId').value.trim();
+            if (!delId) { showMsg('삭제할 번호를 입력해주세요.', 'error'); return; }
+            if (!confirm('정말 [' + delId + '] 항목을 삭제하시겠습니까?')) return;
+            const delDocRef = doc(db, 'books', delId);
+            const delSnap = await getDoc(delDocRef);
+            if (!delSnap.exists()) { showMsg('존재하지 않는 번호입니다.', 'error'); return; }
+            await deleteDoc(delDocRef);
+            showMsg('삭제 완료', 'success');
+            document.getElementById('editBookId').value = '';
+        } catch (err) {
+            console.error('삭제 오류:', err);
+            showMsg('삭제 실패: ' + err.message, 'error');
+        }
     });
 
     /* ── CSV 내보내기 ── */
