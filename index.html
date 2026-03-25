@@ -1051,8 +1051,8 @@
             extendDate: '',
         });
         showMsg(`[${newTitle}] 등록 완료!`, 'success');
-        ['newBookId','newBookTitle','newBookAuthor','newBookPublisher','newBookNote','isbnInput'].forEach(id => {
-            document.getElementById(id).value = '';
+        ['newBookId','newBookTitle','newBookAuthor','newBookPublisher','newBookNote','isbnInput'].forEach(fieldId => {
+            document.getElementById(fieldId).value = '';
         });
     });
 
@@ -1082,8 +1082,8 @@
         if (Object.keys(updates).length === 0) { showMsg('수정할 내용을 입력해주세요.', 'warning'); return; }
         await updateDoc(docRef, updates);
         showMsg('수정 완료!', 'success');
-        ['editBookId','editBookTitle','editBookAuthor','editBookPublisher','editBookNote'].forEach(id => {
-            document.getElementById(id).value = '';
+        ['editBookId','editBookTitle','editBookAuthor','editBookPublisher','editBookNote'].forEach(fieldId => {
+            document.getElementById(fieldId).value = '';
         });
         document.getElementById('editBookGenre').value = '';
         document.getElementById('editBookWard').value = '';
