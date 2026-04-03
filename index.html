@@ -273,8 +273,16 @@
             <!-- 수정/삭제 탭 -->
             <div class="tab-pane" id="tab-edit">
                 <div class="form-group">
-                    <label>대상 등록번호</label>
-                    <input type="text" id="editBookId" placeholder="수정/삭제할 번호 입력">
+                    <label>대상 등록번호 <span style="color:var(--text3);font-weight:400">(예: A001)</span></label>
+                    <div style="display:flex;gap:8px">
+                        <input type="text" id="editBookId" placeholder="수정/삭제할 번호 입력" style="flex:1">
+                        <button class="btn btn-info btn-sm" id="loadBookBtn" type="button">불러오기</button>
+                    </div>
+                    <div id="loadedBookInfo" style="display:none;margin-top:6px;padding:8px 10px;background:var(--success-pale);border-radius:6px;font-size:0.8rem;color:var(--success);font-weight:500"></div>
+                </div>
+                <div class="form-group">
+                    <label>새 등록번호 <span style="color:var(--text3);font-weight:400">(변경 시에만 입력)</span></label>
+                    <input type="text" id="editNewBookId" placeholder="번호 변경할 경우 입력 (예: A002)">
                 </div>
                 <div class="form-group">
                     <label>새 도서명</label>
@@ -762,14 +770,40 @@
         }
     });
 
+    /* ── 불러오기 ── */
+    document.getElementById('loadBookBtn').addEventListener('click', async function() {
+        const loadId = document.getElementById('editBookId').value.trim();
+        if (!loadId) { showMsg('등록번호를 입력해주세요.', 'error'); return; }
+        try {
+            const loadSnap = await getDoc(doc(db, 'books', loadId));
+            if (!loadSnap.exists()) { showMsg('존재하지 않는 번호입니다.', 'error'); document.getElementById('loadedBookInfo').style.display='none'; return; }
+            const d = loadSnap.data();
+            document.getElementById('editBookTitle').value     = d.title || '';
+            document.getElementById('editBookAuthor').value    = d.author || '';
+            document.getElementById('editBookPublisher').value = d.publisher || '';
+            document.getElementById('editBookGenre').value     = d.genre || '';
+            document.getElementById('editBookWard').value      = d.ward || '';
+            document.getElementById('editBookNote').value      = d.note || '';
+            document.getElementById('editNewBookId').value     = '';
+            const info = document.getElementById('loadedBookInfo');
+            info.style.display = 'block';
+            info.textContent = '✅ [' + loadId + '] ' + (d.title || '') + ' 불러왔습니다. 수정 후 수정 버튼을 누르세요.';
+            showMsg('[' + loadId + '] 정보를 불러왔습니다.', 'success');
+        } catch (err) {
+            showMsg('불러오기 실패: ' + err.message, 'error');
+        }
+    });
+
     /* ── 수정 ── */
     document.getElementById('editBtn').addEventListener('click', async function() {
         try {
-            const eId = document.getElementById('editBookId').value.trim();
+            const eId    = document.getElementById('editBookId').value.trim();
+            const eNewId = document.getElementById('editNewBookId').value.trim();
             if (!eId) { showMsg('대상 번호를 입력해주세요.', 'error'); return; }
             const eRef  = doc(db, 'books', eId);
             const eSnap = await getDoc(eRef);
             if (!eSnap.exists()) { showMsg('존재하지 않는 번호입니다.', 'error'); return; }
+            const existing = eSnap.data();
             const updates = {};
             const eTitle     = document.getElementById('editBookTitle').value.trim();
             const eAuthor    = document.getElementById('editBookAuthor').value.trim();
@@ -782,15 +816,28 @@
             if (ePublisher) updates.publisher = ePublisher;
             if (eGenre)     updates.genre     = eGenre;
             if (eWard)      updates.ward      = eWard;
-            if (eNote)      updates.note      = eNote;
-            if (Object.keys(updates).length === 0) { showMsg('수정할 내용을 입력해주세요.', 'warning'); return; }
-            await updateDoc(eRef, updates);
-            showMsg('수정 완료!', 'success');
-            ['editBookId','editBookTitle','editBookAuthor','editBookPublisher','editBookNote'].forEach(function(fid) {
+            if (eNote !== '') updates.note    = eNote;
+
+            // 등록번호 변경: 새 문서 생성 후 기존 삭제
+            if (eNewId && eNewId !== eId) {
+                const checkSnap = await getDoc(doc(db, 'books', eNewId));
+                if (checkSnap.exists()) { showMsg('[' + eNewId + ']는 이미 사용 중인 번호입니다.', 'error'); return; }
+                if (!confirm('[' + eId + '] → [' + eNewId + '] 번호를 변경합니다. 계속하시겠습니까?')) return;
+                const newData = Object.assign({}, existing, updates);
+                await setDoc(doc(db, 'books', eNewId), newData);
+                await deleteDoc(eRef);
+                showMsg('[' + eId + '] → [' + eNewId + '] 번호 변경 및 수정 완료!', 'success');
+            } else {
+                if (Object.keys(updates).length === 0) { showMsg('수정할 내용을 입력해주세요.', 'warning'); return; }
+                await updateDoc(eRef, updates);
+                showMsg('수정 완료!', 'success');
+            }
+            ['editBookId','editNewBookId','editBookTitle','editBookAuthor','editBookPublisher','editBookNote'].forEach(function(fid) {
                 document.getElementById(fid).value = '';
             });
             document.getElementById('editBookGenre').value = '';
             document.getElementById('editBookWard').value = '';
+            document.getElementById('loadedBookInfo').style.display = 'none';
         } catch (err) {
             console.error('수정 오류:', err);
             showMsg('수정 실패: ' + err.message, 'error');
